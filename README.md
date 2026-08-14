@@ -1,2 +1,2 @@
-# transit-estimate
+# Transit Estimate
 Transit estimate for septa project
