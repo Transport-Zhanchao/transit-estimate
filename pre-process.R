@@ -101,3 +101,45 @@ transit <- transit %>%
   filter(!is.na(depart_lon), !is.na(dest_lon))
 
 write.csv(transit, "data/transit_weekday_timed.csv", row.names = FALSE)
+
+# ---- Step 5: SEPTA peak / off-peak flag ------------------------------------
+# SEPTA's peak definition is the Regional Rail fare rule: on weekdays, peak is
+# travel arriving in Center City (30th St / Suburban / Jefferson) between
+# 6:00 and 9:30 a.m., or leaving Center City between 4:00 and 7:00 p.m.;
+# everything else is off-peak. The survey records a trip's own departure time,
+# not a Center City arrival, so the windows are applied to DEPART.
+AM_PEAK <- c(6 * 60, 9 * 60 + 30)   # 6:00 - 9:30
+PM_PEAK <- c(16 * 60, 19 * 60)      # 4:00 - 7:00
+
+transit <- transit %>%
+  mutate(
+    peak_period = case_when(
+      DEPART_MIN_OF_DAY >= AM_PEAK[1] & DEPART_MIN_OF_DAY < AM_PEAK[2] ~ "am_peak",
+      DEPART_MIN_OF_DAY >= PM_PEAK[1] & DEPART_MIN_OF_DAY < PM_PEAK[2] ~ "pm_peak",
+      TRUE ~ "off_peak"
+    ),
+    is_peak = peak_period != "off_peak"
+  )
+
+print(table(transit$peak_period))
+
+# ---- Step 6: slim export ----------------------------------------------------
+# One row per trip: id, origin/destination TAZ centroids, travel time, and
+# departure time.
+# RECORD_ID is the trip key here - TRIP_ID is stored in scientific notation in
+# the source csv and has already lost precision (845 distinct values for 2,015
+# trips), so it cannot identify a trip.
+transit_simple <- transit %>%
+  transmute(
+    record_id        = RECORD_ID,
+    depart_time      = DEPART,
+    depart_min_of_day = DEPART_MIN_OF_DAY,
+    depart_lon, depart_lat,
+    dest_lon, dest_lat,
+    peak_period,
+    is_peak,
+    survey_travtime  = Survey_TravTime,
+    model_travtime   = Model_TravTime
+  )
+
+write.csv(transit_simple, "data/transit_simple.csv", row.names = FALSE)
