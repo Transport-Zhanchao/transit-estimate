@@ -15,8 +15,11 @@ transit_mode<-transit%>%
   group_by(MODE)%>%
   summarise(n=n())
 
+# 14 SEPTA bus/trolleybus, 21 subway/El, 23 trolley/light rail.
+# Regional Rail (22) is left out: the GTFS feeds we route with are City Transit
+# only, so those trips cannot be estimated as rail.
 transit <- transit %>%
-  filter(MODE %in% c(14, 21, 22, 23))
+  filter(MODE %in% c(14, 21, 23))
 
 write.csv(transit, "data/transit.csv")
 
