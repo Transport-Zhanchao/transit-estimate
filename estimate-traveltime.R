@@ -36,7 +36,8 @@ SERVICE_DATE <- as.integer(Sys.getenv("TT_DATE", "20251015"))
 
 GTFS_ZIP     <- sprintf("data/gtfs/%s.zip", SCENARIO)
 TRIPS_CSV    <- "data/transit_simple.csv"
-OUT_CSV      <- sprintf("data/transit_traveltime_%s.csv", SCENARIO)
+OUT_CSV      <- sprintf("data/transit_traveltime%s_%s.csv",
+                        if (Sys.getenv("TT_SAMPLED") == "1") "_sampled" else "", SCENARIO)
 CACHE_RDS    <- sprintf("data/cache/gtfs_%s_%s_timetable.rds", SCENARIO, SERVICE_DATE)
 WALK_MPS     <- 1.33       # 4.8 km/h
 DETOUR       <- 1.3        # straight line -> walked distance
@@ -46,6 +47,18 @@ TRANSFER_R   <- 400        # walking transfers between stops
 DEP_WINDOW   <- 1800       # how long a trip may wait for a departure (s)
 MAX_TT       <- 120 * 60   # give up beyond this in-system travel time (s)
 N_CORES      <- max(1, detectCores() - 1)
+
+# Departure-time sampling. With TT_SAMPLED=1 each trip is routed eight times,
+# at evenly spaced departures spanning roughly the reported time +/- 30 minutes,
+# and the eight results are averaged.
+#
+# The spacing is 8.5 minutes on purpose. SEPTA headways cluster on 10, 12 and 15
+# minutes, and a spacing that divides into those would keep landing on the same
+# point in the headway cycle, so the eight draws would all inherit the same
+# wait. 8.5 does not divide any of them, and the 59.5-minute span is not a
+# multiple of 10, 12 or 15 either, so the first and last draw do not collide.
+SAMPLED  <- Sys.getenv("TT_SAMPLED") == "1"
+OFFSETS  <- if (SAMPLED) seq(-3.5, 3.5) * 8.5 * 60 else 0   # seconds
 
 # Only rows in this range are processed; set to NULL for all trips.
 ROW_LIMIT <- if (nzchar(Sys.getenv("TT_ROWS"))) as.integer(Sys.getenv("TT_ROWS")) else NULL
@@ -151,23 +164,48 @@ message("routing ", nrow(trips), " trips on ", N_CORES, " cores | scenario: ",
 
 started <- Sys.time()
 res <- mclapply(seq_len(nrow(trips)), function(i) {
-  r <- trips[i]
-  out <- estimate_one(r$depart_lon, r$depart_lat, r$dest_lon, r$dest_lat,
-                      r$depart_min_of_day * 60)
-  data.table(
-    record_id       = r$record_id,
-    scenario        = SCENARIO,
-    service_date    = SERVICE_DATE,
-    gtfs_status     = out$status,
-    gtfs_total_min  = if (is.null(out$total_min))       NA_real_ else out$total_min,
-    gtfs_access_min = if (is.null(out$access_walk_min)) NA_real_ else out$access_walk_min,
-    gtfs_wait_min   = if (is.null(out$wait_min))        NA_real_ else out$wait_min,
-    gtfs_ride_min   = if (is.null(out$ride_min))        NA_real_ else out$ride_min,
-    gtfs_egress_min = if (is.null(out$egress_walk_min)) NA_real_ else out$egress_walk_min,
-    gtfs_transfers  = if (is.null(out$n_transfers))     NA_integer_ else out$n_transfers,
-    access_stop_id  = if (is.null(out$access_stop))     NA_character_ else as.character(out$access_stop),
-    egress_stop_id  = if (is.null(out$egress_stop))     NA_character_ else as.character(out$egress_stop)
-  )
+  r  <- trips[i]
+  t0 <- r$depart_min_of_day * 60
+
+  runs <- lapply(OFFSETS, function(off) {
+    tt <- t0 + off
+    if (tt < 0) return(list(status = "before_midnight"))
+    estimate_one(r$depart_lon, r$depart_lat, r$dest_lon, r$dest_lat, tt)
+  })
+
+  num <- function(x, f) if (is.null(x[[f]])) NA_real_ else as.numeric(x[[f]])
+
+  if (!SAMPLED) {
+    out <- runs[[1]]
+    return(data.table(
+      record_id       = r$record_id,
+      scenario        = SCENARIO,
+      service_date    = SERVICE_DATE,
+      gtfs_status     = out$status,
+      gtfs_total_min  = num(out, "total_min"),
+      gtfs_access_min = num(out, "access_walk_min"),
+      gtfs_wait_min   = num(out, "wait_min"),
+      gtfs_ride_min   = num(out, "ride_min"),
+      gtfs_egress_min = num(out, "egress_walk_min"),
+      gtfs_transfers  = if (is.null(out$n_transfers)) NA_integer_ else out$n_transfers,
+      access_stop_id  = if (is.null(out$access_stop)) NA_character_ else as.character(out$access_stop),
+      egress_stop_id  = if (is.null(out$egress_stop)) NA_character_ else as.character(out$egress_stop)
+    ))
+  }
+
+  # sampled: one column per draw, then the mean of whichever draws routed
+  totals <- vapply(runs, num, numeric(1), f = "total_min")
+  row <- data.table(record_id    = r$record_id,
+                    scenario     = SCENARIO,
+                    service_date = SERVICE_DATE)
+  for (k in seq_along(OFFSETS)) {
+    set(row, j = sprintf("tt_%d_min", k), value = totals[k])
+    set(row, j = sprintf("tt_%d_offset_min", k), value = OFFSETS[k] / 60)
+  }
+  row[, n_ok       := sum(!is.na(totals))]
+  row[, tt_mean_min := if (all(is.na(totals))) NA_real_ else mean(totals, na.rm = TRUE)]
+  row[, tt_sd_min   := if (sum(!is.na(totals)) < 2) NA_real_ else sd(totals, na.rm = TRUE)]
+  row
 }, mc.cores = N_CORES)
 
 res <- rbindlist(res)
@@ -177,9 +215,20 @@ out <- merge(trips, res, by = "record_id", sort = FALSE)
 fwrite(out, OUT_CSV)
 
 cat("\n", SCENARIO, " @ ", SERVICE_DATE, "\n", sep = "")
-print(table(out$gtfs_status, useNA = "ifany"))
-ok <- out[gtfs_status == "ok"]
-cat("median estimated door-to-door:", round(median(ok$gtfs_total_min), 1), "min\n")
-cat("median survey travel time    :",
-    round(median(ok$survey_travtime[ok$survey_travtime > 0], na.rm = TRUE), 1), "min\n")
-cat("median model travel time     :", round(median(ok$model_travtime, na.rm = TRUE), 1), "min\n")
+if (SAMPLED) {
+  cat("draws per trip:", length(OFFSETS),
+      " offsets (min):", paste(round(OFFSETS / 60, 2), collapse = ", "), "\n")
+  print(table(out$n_ok))
+  ok <- out[!is.na(tt_mean_min)]
+  cat("trips with at least one routed draw:", nrow(ok), "\n")
+  cat("median of the per-trip means:", round(median(ok$tt_mean_min), 1), "min\n")
+  cat("median within-trip sd across draws:",
+      round(median(ok$tt_sd_min, na.rm = TRUE), 1), "min\n")
+} else {
+  print(table(out$gtfs_status, useNA = "ifany"))
+  ok <- out[gtfs_status == "ok"]
+  cat("median estimated door-to-door:", round(median(ok$gtfs_total_min), 1), "min\n")
+  cat("median survey travel time    :",
+      round(median(ok$survey_travtime[ok$survey_travtime > 0], na.rm = TRUE), 1), "min\n")
+  cat("median model travel time     :", round(median(ok$model_travtime, na.rm = TRUE), 1), "min\n")
+}
