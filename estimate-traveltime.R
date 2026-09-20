@@ -31,14 +31,24 @@ stopifnot(SCENARIO %in% c("cut", "restore"))
 
 # 2025-10-15 is a plain Wednesday, and it is the same weekday in both feeds:
 # cut.zip runs 2025-08-25 to 2026-02-21, restore.zip only starts 2025-09-28, so
-# any comparison date has to sit in the overlap.
+# any comparison date has to sit in the overlap. The merged feeds need
+# TT_DATE=20251105: restore_rail.zip's weekday service only starts 2025-10-26,
+# and both bus feeds run the same trips on 11-05 as on 10-15.
 SERVICE_DATE <- as.integer(Sys.getenv("TT_DATE", "20251015"))
 
-GTFS_ZIP     <- sprintf("data/gtfs/%s.zip", SCENARIO)
-TRIPS_CSV    <- "data/transit_simple.csv"
-OUT_CSV      <- sprintf("data/transit_traveltime%s_%s.csv",
-                        if (Sys.getenv("TT_SAMPLED") == "1") "_sampled" else "", SCENARIO)
-CACHE_RDS    <- sprintf("data/cache/gtfs_%s_%s_timetable.rds", SCENARIO, SERVICE_DATE)
+# TT_FEED picks a feed variant: "" is City Transit only, "merged" adds Regional
+# Rail (built by merge-gtfs.R). TT_TRIPS points at a different trip table, and
+# TT_TAG names the outputs so runs on different trip sets don't overwrite each other.
+FEED_VARIANT <- Sys.getenv("TT_FEED", "")
+TRIPS_CSV    <- Sys.getenv("TT_TRIPS", "data/transit_simple.csv")
+RUN_TAG      <- Sys.getenv("TT_TAG", "")
+
+feed_name    <- if (nzchar(FEED_VARIANT)) paste0(SCENARIO, "_", FEED_VARIANT) else SCENARIO
+GTFS_ZIP     <- sprintf("data/gtfs/%s.zip", feed_name)
+OUT_CSV      <- sprintf("data/transit_traveltime%s%s_%s.csv",
+                        if (Sys.getenv("TT_SAMPLED") == "1") "_sampled" else "",
+                        if (nzchar(RUN_TAG)) paste0("_", RUN_TAG) else "", SCENARIO)
+CACHE_RDS    <- sprintf("data/cache/gtfs_%s_%s_timetable.rds", feed_name, SERVICE_DATE)
 WALK_MPS     <- 1.33       # 4.8 km/h
 DETOUR       <- 1.3        # straight line -> walked distance
 ACCESS_R     <- 800        # max straight-line metres from a centroid to a stop
@@ -106,6 +116,31 @@ near_stops <- function(lon, lat, radius = ACCESS_R, n = NULL) {
              walk    = as.integer(ceiling(d[i] * DETOUR / WALK_MPS)))
 }
 
+# Rail stations sit a few hundred metres farther out than the dense bus stops
+# around them, so "nearest four stops" alone would drop a walkable station in
+# favour of four bus stops. In a merged feed the nearest station within reach is
+# always added as an extra access candidate. Bus-only feeds have no stations, so
+# their results are unchanged.
+RAIL_ZIP <- sprintf("data/gtfs/%s_rail.zip", SCENARIO)
+rail_ids <- if (FEED_VARIANT == "merged" && file.exists(RAIL_ZIP)) {
+  fread(cmd = sprintf("unzip -p '%s' stops.txt", RAIL_ZIP), colClasses = "character")$stop_id
+} else character(0)
+is_rail <- stops$stop_id %in% rail_ids
+if (any(is_rail)) message(sum(is_rail), " rail stations with service")
+
+access_stops <- function(lon, lat) {
+  p <- st_coordinates(st_transform(st_sfc(st_point(c(lon, lat)), crs = 4326), 26918))
+  d <- sqrt((stop_xy[, 1] - p[1])^2 + (stop_xy[, 2] - p[2])^2)
+  i <- which(d <= ACCESS_R)
+  if (!length(i)) return(NULL)
+  i <- i[order(d[i])]
+  keep <- head(i, N_ACCESS)
+  station <- i[is_rail[i]][1]
+  if (!is.na(station) && !station %in% keep) keep <- c(keep, station)
+  data.table(stop_id = stops$stop_id[keep],
+             walk    = as.integer(ceiling(d[keep] * DETOUR / WALK_MPS)))
+}
+
 hms_to_s <- function(x) {
   p <- tstrsplit(as.character(x), ":", fixed = TRUE)
   as.integer(p[[1]]) * 3600L + as.integer(p[[2]]) * 60L + as.integer(p[[3]])
@@ -117,7 +152,7 @@ hms_to_s <- function(x) {
 # the trip's reported departure time, so the total includes access walk, the
 # wait for the first vehicle, riding, transfers, and the egress walk.
 estimate_one <- function(depart_lon, depart_lat, dest_lon, dest_lat, t0) {
-  acc <- near_stops(depart_lon, depart_lat, ACCESS_R, N_ACCESS)
+  acc <- access_stops(depart_lon, depart_lat)
   egr <- near_stops(dest_lon,   dest_lat,   ACCESS_R)
   if (is.null(acc)) return(list(status = "no_origin_stop"))
   if (is.null(egr)) return(list(status = "no_dest_stop"))
@@ -159,8 +194,8 @@ estimate_one <- function(depart_lon, depart_lat, dest_lon, dest_lat, t0) {
 # ---- 4. run over every trip -------------------------------------------------
 trips <- fread(TRIPS_CSV)
 if (!is.null(ROW_LIMIT)) trips <- trips[seq_len(min(ROW_LIMIT, nrow(trips)))]
-message("routing ", nrow(trips), " trips on ", N_CORES, " cores | scenario: ",
-        SCENARIO, " | date: ", SERVICE_DATE)
+message("routing ", nrow(trips), " trips from ", TRIPS_CSV, " on ", N_CORES,
+        " cores | feed: ", GTFS_ZIP, " | date: ", SERVICE_DATE)
 
 started <- Sys.time()
 res <- mclapply(seq_len(nrow(trips)), function(i) {

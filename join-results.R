@@ -41,3 +41,21 @@ cat("estimated under restore:", sum(!is.na(out$tt_restore_min)), "\n")
 cat("estimated under both   :", sum(!is.na(out$tt_cut_min) & !is.na(out$tt_restore_min)), "\n")
 cat("8-draw mean, both      :",
     sum(!is.na(out$tt_cut_mean_min) & !is.na(out$tt_restore_mean_min)), "\n")
+
+# ---- Regional Rail trips ------------------------------------------------------
+# Same columns, for the trips pulled out by extract-regional-rail.R and routed on
+# the merged bus + rail feeds (2025-11-05, 8-draw means).
+rail_cut <- "data/transit_traveltime_sampled_rail_cut.csv"
+rail_res <- "data/transit_traveltime_sampled_rail_restore.csv"
+if (file.exists(rail_cut) && file.exists(rail_res)) {
+  rail <- fread("data/transit_regional_rail.csv")
+  rc <- fread(rail_cut)[, .(record_id, tt_cut_mean_min = tt_mean_min,
+                            tt_cut_sd_min = tt_sd_min, tt_cut_n_ok = n_ok)]
+  rr <- fread(rail_res)[, .(record_id, tt_restore_mean_min = tt_mean_min,
+                            tt_restore_sd_min = tt_sd_min, tt_restore_n_ok = n_ok)]
+  rail <- merge(rail, rc, by = "record_id", all.x = TRUE, sort = FALSE)
+  rail <- merge(rail, rr, by = "record_id", all.x = TRUE, sort = FALSE)
+  fwrite(rail, "data/transit_regional_rail_estimates.csv")
+  cat("\nregional rail rows:", nrow(rail), " 8-draw mean, both:",
+      sum(!is.na(rail$tt_cut_mean_min) & !is.na(rail$tt_restore_mean_min)), "\n")
+}
