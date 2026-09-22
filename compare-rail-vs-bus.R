@@ -1,0 +1,353 @@
+# Regional Rail vs everything else: cut - restore, cut side by side.
+#
+# Input : data/transit_simple_estimates.csv          (bus / subway / trolley)
+#         data/transit_regional_rail_estimates.csv   (Regional Rail)
+#         data/transit_weekday_timed.csv             (for MODE and county)
+# Output: tables/rail-vs-other-*.md   (markdown, pasted into report.md)
+#
+# Every table is the same quantity - delta = cut minus restore, on the eight-draw
+# means - sliced a different way, with the two samples next to each other so the
+# rail / non-rail contrast is readable without flipping between sections.
+
+suppressPackageStartupMessages(library(data.table))
+
+dir.create("tables", showWarnings = FALSE)
+
+PHILA <- 42101
+county_name <- c("42101" = "Philadelphia", "42091" = "Montgomery",
+                 "42045" = "Delaware",     "42017" = "Bucks",
+                 "42029" = "Chester")
+
+# ---- load, keep trips routed under both scenarios ----------------------------
+bus <- fread("data/transit_simple_estimates.csv")[
+  !is.na(tt_cut_mean_min) & !is.na(tt_restore_mean_min)]
+rail <- fread("data/transit_regional_rail_estimates.csv")[
+  !is.na(tt_cut_mean_min) & !is.na(tt_restore_mean_min)]
+
+# MODE and county are not in the slim bus table; pull them back from the
+# weekday table the slim one was cut from.
+wk <- fread("data/transit_weekday_timed.csv")[
+  , .(record_id = RECORD_ID, mode = MODE, o_county = O_COUNTY, d_county = D_COUNTY)]
+bus <- merge(bus, wk, by = "record_id", all.x = TRUE, sort = FALSE)
+
+mode_label <- c("14" = "Bus / trolleybus", "21" = "Subway / El",
+                "23" = "Trolley / light rail", "22" = "Regional Rail")
+
+prep <- function(d, sample_label) {
+  d[, `:=`(
+    sample  = sample_label,
+    delta   = tt_cut_mean_min - tt_restore_mean_min,
+    pct     = 100 * (tt_cut_mean_min - tt_restore_mean_min) / tt_restore_mean_min,
+    geo     = fifelse(o_county == PHILA & d_county == PHILA, "Within Philadelphia",
+              fifelse(o_county != d_county, "Suburb <-> city / cross-county",
+                      "Within one suburban county")),
+    period  = c(am_peak = "AM peak", pm_peak = "PM peak",
+                off_peak = "Off-peak")[peak_period],
+    mode_lab = mode_label[as.character(mode)]
+  )]
+  d[]
+}
+
+bus  <- prep(bus,  "Other (bus / subway / trolley)")
+rail <- prep(rail, "Regional Rail")
+
+keep <- c("sample", "mode_lab", "delta", "pct", "geo", "period", "peak_period",
+          "o_county", "d_county", "depart_min_of_day",
+          "tt_cut_mean_min", "tt_restore_mean_min", "tt_cut_sd_min",
+          "tt_restore_sd_min", "survey_travtime", "model_travtime")
+all <- rbindlist(list(bus[, ..keep], rail[, ..keep]))
+all[, sample := factor(sample, levels = c("Regional Rail",
+                                          "Other (bus / subway / trolley)"))]
+
+# ---- helpers ----------------------------------------------------------------
+f1 <- function(x) sprintf("%.1f", x)
+fs <- function(x) sprintf("%+.2f", x)   # signed, for deltas
+fp <- function(x) sprintf("%.0f%%", x)
+
+# One block of summary statistics for an arbitrary subset.
+stats <- function(d) {
+  list(n              = nrow(d),
+       cut            = median(d$tt_cut_mean_min),
+       restore        = median(d$tt_restore_mean_min),
+       med_delta      = median(d$delta),
+       mean_delta     = mean(d$delta),
+       med_pct        = median(d$pct),
+       p75            = quantile(d$delta, 0.75, names = FALSE),
+       p90            = quantile(d$delta, 0.90, names = FALSE),
+       share_worse    = 100 * mean(d$delta >  1),
+       share_same     = 100 * mean(abs(d$delta) <= 1),
+       share_better   = 100 * mean(d$delta < -1),
+       share_gt5      = 100 * mean(d$delta >  5),
+       share_gt10     = 100 * mean(d$delta > 10),
+       share_gt20     = 100 * mean(d$delta > 20))
+}
+
+# Two samples side by side within each level of `by`; `by` may be NULL for a
+# single all-trips row.
+side_by_side <- function(d, by, cols, header, order_levels = NULL) {
+  lv <- if (is.null(by)) "All trips" else {
+    if (!is.null(order_levels)) order_levels else sort(unique(d[[by]]))
+  }
+  rows <- character()
+  for (l in lv) {
+    sub <- if (is.null(by)) d else d[get(by) == l]
+    cells <- character()
+    for (s in levels(d$sample)) {
+      ss <- sub[sample == s]
+      cells <- c(cells, if (nrow(ss) == 0) rep("--", length(cols)) else
+                        vapply(cols, function(f) f(stats(ss)), character(1)))
+    }
+    rows <- c(rows, paste0("| ", l, " | ", paste(cells, collapse = " | "), " |"))
+  }
+  c(header, rows, "")
+}
+
+# column recipes ---------------------------------------------------------------
+c_n     <- function(s) format(s$n, big.mark = ",")
+c_med   <- function(s) fs(s$med_delta)
+c_mean  <- function(s) fs(s$mean_delta)
+c_pct   <- function(s) sprintf("%+.1f%%", s$med_pct)
+c_cut   <- function(s) f1(s$cut)
+c_res   <- function(s) f1(s$restore)
+
+md <- character()
+add <- function(...) md <<- c(md, ...)
+
+add("<!-- generated by compare-rail-vs-bus.R - do not edit by hand -->", "")
+
+# ---- Table A: the headline, with the spread of outcomes ---------------------
+add("### Table A. Regional Rail vs everything else, side by side", "",
+    "| Measure | Regional Rail | Other (bus / subway / trolley) | Rail minus other |",
+    "|---|---|---|---|")
+rl <- all[sample == "Regional Rail"]; ot <- all[sample != "Regional Rail"]
+rowAB <- function(lab, f, g = function(a, b) fs(a - b), num = identity) {
+  a <- f(rl); b <- f(ot)
+  add(sprintf("| %s | %s | %s | %s |", lab, num(a), num(b), g(a, b)))
+}
+rowAB("Trips routed under both", function(d) nrow(d),
+      function(a, b) "--", function(x) format(x, big.mark = ","))
+rowAB("Median time, cut",      function(d) median(d$tt_cut_mean_min),     num = f1)
+rowAB("Median time, restore",  function(d) median(d$tt_restore_mean_min), num = f1)
+rowAB("Median delta",          function(d) median(d$delta),               num = fs)
+rowAB("Mean delta",            function(d) mean(d$delta),                 num = fs)
+rowAB("Median delta, % of restore time", function(d) median(d$pct),
+      function(a, b) sprintf("%+.1f pp", a - b), function(x) sprintf("%+.1f%%", x))
+rowAB("75th pct delta", function(d) quantile(d$delta, .75, names = FALSE), num = fs)
+rowAB("90th pct delta", function(d) quantile(d$delta, .90, names = FALSE), num = fs)
+rowAB("Share > 5 min slower",  function(d) 100 * mean(d$delta > 5),  function(a, b) sprintf("%+.0f pp", a - b), fp)
+rowAB("Share > 10 min slower", function(d) 100 * mean(d$delta > 10), function(a, b) sprintf("%+.0f pp", a - b), fp)
+rowAB("Share > 20 min slower", function(d) 100 * mean(d$delta > 20), function(a, b) sprintf("%+.0f pp", a - b), fp)
+rowAB("Share faster by > 1 min under cuts", function(d) 100 * mean(d$delta < -1),
+      function(a, b) sprintf("%+.0f pp", a - b), fp)
+rowAB("Share faster at all under cuts", function(d) 100 * mean(d$delta < 0),
+      function(a, b) sprintf("%+.0f pp", a - b), fp)
+rowAB("Median within-trip SD, cut", function(d) median(d$tt_cut_sd_min, na.rm = TRUE), num = f1)
+add("")
+
+wt <- wilcox.test(delta ~ sample, data = all)
+kt <- ks.test(rl$delta, ot$delta)
+add(sprintf(paste("Mann-Whitney on the two delta distributions: W = %s, p = %s.",
+                  "Two-sample KS: D = %.3f, p = %s."),
+            format(unname(wt$statistic), big.mark = ","),
+            format.pval(wt$p.value, digits = 2, eps = 1e-10),
+            unname(kt$statistic),
+            format.pval(kt$p.value, digits = 2, eps = 1e-10)), "")
+
+# ---- Table B: percentiles of the delta, side by side ------------------------
+add("### Table B. Distribution of the per-trip delta", "",
+    "| Percentile of delta | Regional Rail | Other | Rail minus other |",
+    "|---|---|---|---|")
+for (q in c(.05, .10, .25, .50, .75, .90, .95, .99)) {
+  a <- quantile(rl$delta, q, names = FALSE); b <- quantile(ot$delta, q, names = FALSE)
+  add(sprintf("| %s | %s | %s | %s |",
+              if (q == .5) "**50th (median)**" else paste0(q * 100, "th"),
+              fs(a), fs(b), fs(a - b)))
+}
+add(sprintf("| IQR width | %s | %s | %s |",
+            f1(IQR(rl$delta)), f1(IQR(ot$delta)), fs(IQR(rl$delta) - IQR(ot$delta))), "")
+
+# ---- Table C: direction of change ------------------------------------------
+add("### Table C. Direction of the change, per trip", "",
+    "| Outcome under the cuts | Regional Rail | Other |",
+    "|---|---|---|")
+buckets <- list("More than 20 min slower" = function(x) x > 20,
+                "10 to 20 min slower"     = function(x) x > 10 & x <= 20,
+                "5 to 10 min slower"      = function(x) x > 5  & x <= 10,
+                "1 to 5 min slower"       = function(x) x > 1  & x <= 5,
+                "Within +/- 1 min"        = function(x) abs(x) <= 1,
+                "1 to 5 min faster"       = function(x) x < -1 & x >= -5,
+                "More than 5 min faster"  = function(x) x < -5)
+for (nm in names(buckets)) {
+  fn <- buckets[[nm]]
+  add(sprintf("| %s | %d (%s) | %d (%s) |", nm,
+              sum(fn(rl$delta)), fp(100 * mean(fn(rl$delta))),
+              sum(fn(ot$delta)), fp(100 * mean(fn(ot$delta)))))
+}
+add("")
+
+# ---- Table D: matched geography ---------------------------------------------
+geo_lv <- c("Suburb <-> city / cross-county", "Within Philadelphia",
+            "Within one suburban county")
+add(side_by_side(
+  all, "geo", list(c_n, c_med, c_mean, c_pct),
+  c("### Table D. By trip geography, both samples on the same buckets", "",
+    "| Geography | Rail n | Rail median | Rail mean | Rail % | Other n | Other median | Other mean | Other % |",
+    "|---|---|---|---|---|---|---|---|---|"),
+  geo_lv))
+
+# ---- Table E: rail's own county pairs, against the matching non-rail trips --
+add("### Table E. By origin county", "",
+    "| Origin county | Rail n | Rail median | Other n | Other median |",
+    "|---|---|---|---|---|")
+for (cy in names(sort(table(rl$o_county), decreasing = TRUE))) {
+  a <- all[sample == "Regional Rail" & o_county == cy]
+  b <- all[sample != "Regional Rail" & o_county == cy]
+  add(sprintf("| %s | %s | %s | %s | %s |",
+              county_name[cy],
+              if (nrow(a)) nrow(a) else "--", if (nrow(a)) fs(median(a$delta)) else "--",
+              if (nrow(b)) nrow(b) else "--", if (nrow(b)) fs(median(b$delta)) else "--"))
+}
+add("")
+
+# ---- Table F: matched time of day -------------------------------------------
+per_lv <- c("AM peak", "PM peak", "Off-peak")
+add(side_by_side(
+  all, "period", list(c_n, c_cut, c_res, c_med, c_mean),
+  c("### Table F. By time of day, both samples on the same buckets", "",
+    "| Period | Rail n | Rail cut | Rail restore | Rail median | Rail mean | Other n | Other cut | Other restore | Other median | Other mean |",
+    "|---|---|---|---|---|---|---|---|---|---|---|"),
+  per_lv))
+
+# The interaction is the point of Table E: state it as a difference of medians.
+add("| Period | Rail median delta | Other median delta | Rail minus other |",
+    "|---|---|---|---|")
+for (p in per_lv) {
+  a <- median(all[sample == "Regional Rail" & period == p]$delta)
+  b <- median(all[sample != "Regional Rail" & period == p]$delta)
+  add(sprintf("| %s | %s | %s | %s |", p, fs(a), fs(b), fs(a - b)))
+}
+add("")
+
+# ---- Table G: finer departure-hour bands ------------------------------------
+all[, hour_band := cut(depart_min_of_day / 60,
+      breaks = c(0, 6, 9, 12, 15, 18, 21, 24),
+      labels = c("before 6", "6-9", "9-12", "12-15", "15-18", "18-21", "21-24"),
+      right = FALSE)]
+add(side_by_side(
+  all, "hour_band", list(c_n, c_med),
+  c("### Table G. By departure hour", "",
+    "| Departure hour | Rail n | Rail median | Other n | Other median |",
+    "|---|---|---|---|---|"),
+  levels(all$hour_band)))
+
+# ---- Table H: rail against each non-rail mode ------------------------------
+add("### Table H. Regional Rail against each non-rail mode", "",
+    "| Mode | n | Cut | Restore | Median delta | Mean delta | Median % | Share > 10 min |",
+    "|---|---|---|---|---|---|---|---|")
+mode_order <- c("Regional Rail", "Bus / trolleybus", "Subway / El",
+                "Trolley / light rail")
+for (m in mode_order) {
+  s <- stats(all[mode_lab == m])
+  add(sprintf("| %s | %s | %s | %s | %s | %s | %s | %s |",
+              if (m == "Regional Rail") paste0("**", m, "**") else m,
+              c_n(s), f1(s$cut), f1(s$restore), fs(s$med_delta),
+              fs(s$mean_delta), sprintf("%+.1f%%", s$med_pct), fp(s$share_gt10)))
+}
+add("")
+
+# ---- Table I: rail legs vs the bus legs that feed a station -----------------
+rail_split <- rail[, .(n = .N, cut = median(tt_cut_mean_min),
+                       restore = median(tt_restore_mean_min),
+                       med = median(delta), mean = mean(delta)), by = rr_role]
+setorder(rail_split, -n)
+add("### Table I. Within the rail sample: train legs vs feeder legs", "",
+    "| Leg type | n | Cut | Restore | Median delta | Mean delta |",
+    "|---|---|---|---|---|---|")
+for (i in seq_len(nrow(rail_split))) {
+  r <- rail_split[i]
+  add(sprintf("| %s | %d | %s | %s | %s | %s |",
+              c(rail_leg = "Rail leg", feeder_leg = "Feeder bus / subway leg")[r$rr_role],
+              r$n, f1(r$cut), f1(r$restore), fs(r$med), fs(r$mean)))
+}
+add("")
+
+# ---- Table J: by trip length ------------------------------------------------
+# Banded on restored-scenario time so the bands do not move between scenarios.
+all[, len_band := cut(tt_restore_mean_min,
+      breaks = c(0, 20, 30, 45, 60, 90, Inf),
+      labels = c("under 20", "20-30", "30-45", "45-60", "60-90", "90+"),
+      right = FALSE)]
+add(side_by_side(
+  all, "len_band", list(c_n, c_med, c_pct),
+  c("### Table J. By trip length (restored-scenario minutes)", "",
+    "| Restore time | Rail n | Rail median | Rail % | Other n | Other median | Other % |",
+    "|---|---|---|---|---|---|---|"),
+  levels(all$len_band)))
+
+# ---- Table K: scenario effect against departure-time noise ------------------
+add("### Table K. Scenario effect against departure-time noise", "",
+    "| Measure | Regional Rail | Other |",
+    "|---|---|---|")
+# Three bus trips routed fewer than two departures and have no SD; drop them
+# from the SD medians only.
+noise <- function(d) c(median(d$tt_cut_sd_min, na.rm = TRUE),
+                       median(d$tt_restore_sd_min, na.rm = TRUE),
+                       median(d$delta), mean(d$delta))
+a <- noise(rl); b <- noise(ot)
+add(sprintf("| Median within-trip SD, cut | %s | %s |", f1(a[1]), f1(b[1])),
+    sprintf("| Median within-trip SD, restore | %s | %s |", f1(a[2]), f1(b[2])),
+    sprintf("| Median delta | %s | %s |", fs(a[3]), fs(b[3])),
+    sprintf("| Mean delta / median SD | %s | %s |",
+            f1(a[4] / a[1]), f1(b[4] / b[1])), "")
+
+# The figure needs ASCII for the plot font; the markdown does not.
+md <- gsub("Suburb <-> city", "Suburb \u2194 city", md, fixed = TRUE)
+md <- gsub("+/- 1 min", "\u00b1 1 min", md, fixed = TRUE)
+
+# Rscript may not be in a UTF-8 locale; write the bytes rather than let
+# writeLines re-encode the two non-ASCII characters into <U+....> escapes.
+con <- file("tables/rail-vs-other.md", open = "wb")
+writeLines(enc2utf8(md), con, useBytes = TRUE)
+close(con)
+cat("wrote tables/rail-vs-other.md (", length(md), "lines )\n")
+cat("rail n =", nrow(rl), " other n =", nrow(ot), "\n")
+
+# ---- Figure: the rail / non-rail gap across every slice ---------------------
+# One panel per slicing, median delta for each sample, so the gap (or its
+# absence) is visible without reading the numbers.
+suppressPackageStartupMessages(library(ggplot2))
+
+slice_medians <- function(by, panel, lv = NULL) {
+  d <- all[!is.na(get(by)), .(med = median(delta), n = .N), by = c("sample", by)]
+  setnames(d, by, "level")
+  d[, `:=`(panel = panel,
+           level = factor(as.character(level),
+                          levels = rev(if (is.null(lv)) sort(unique(as.character(level)))
+                                       else lv)))]
+  d[n >= 10]   # thin cells read as noise on a dot plot
+}
+
+fig <- rbindlist(list(
+  slice_medians("geo",       "Geography",       geo_lv),
+  slice_medians("period",    "Time of day",     per_lv),
+  slice_medians("len_band",  "Trip length (restore min)", levels(all$len_band)),
+  slice_medians("hour_band", "Departure hour",  levels(all$hour_band))
+), use.names = TRUE)
+fig[, panel := factor(panel, levels = c("Geography", "Time of day",
+                                        "Trip length (restore min)", "Departure hour"))]
+
+ggsave("figures/05-rail-vs-other-slices.png",
+  ggplot(fig, aes(med, level, colour = sample)) +
+    geom_vline(xintercept = 0, colour = "grey70", linetype = "dashed") +
+    geom_line(aes(group = level), colour = "grey75", linewidth = 0.6) +
+    geom_point(size = 3) +
+    facet_wrap(~panel, scales = "free_y", ncol = 2) +
+    scale_colour_manual(values = c("Regional Rail" = "#8a6d3b",
+                                   "Other (bus / subway / trolley)" = "#3b6ea5")) +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "top") +
+    labs(title = "Median extra minutes under the cuts: Regional Rail vs everything else",
+         subtitle = "cut minus restore, eight-draw means; cells with fewer than 10 trips omitted",
+         x = "Median minutes slower under the cuts", y = NULL, colour = NULL),
+  width = 10, height = 7, dpi = 150)
+cat("wrote figures/05-rail-vs-other-slices.png\n")
