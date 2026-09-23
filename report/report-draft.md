@@ -37,7 +37,7 @@ Everything below is the same quantity — **delta = cut minus restore**, on the
 eight-draw means, one value per trip — sliced different ways, with Regional Rail
 and the non-rail sample side by side in every table. Positive means slower under
 the cuts. `07-compare-rail-vs-bus.R` regenerates all eleven tables into
-`tables/rail-vs-other.md`; they are reproduced here with the reading.
+`../tables/rail-vs-other.md`; they are reproduced here with the reading.
 
 ### Rail loses roughly twice what everything else loses
 
@@ -102,9 +102,9 @@ out *faster* under the cuts, which is the feed-mismatch noise described in the
 caveats — it is no worse for rail, so the rail penalty sits on top of a similar
 amount of asymmetry rather than being produced by it.
 
-![Extra minutes under the cuts](figures/01-delta-bus-vs-rail.png)
+![Extra minutes under the cuts](../figures/01-delta-bus-vs-rail.png)
 
-![Travel time distributions](figures/02-traveltime-distributions.png)
+![Travel time distributions](../figures/02-traveltime-distributions.png)
 
 ### Inside Philadelphia there is no rail penalty at all
 
@@ -138,7 +138,7 @@ county by county outward while the non-rail sample stays flat:
 The two outer-county non-rail cells (Chester, Bucks) are 8 and 14 trips, and
 their +0.00 medians should not be read as findings.
 
-![Rail losses by geography](figures/04-rail-by-geography.png)
+![Rail losses by geography](../figures/04-rail-by-geography.png)
 
 ### Rail and non-rail are hit in opposite time periods
 
@@ -179,7 +179,7 @@ The 6–9 band carries the rail result almost by itself (+5.39, n = 175). Outsid
 it rail sits between +2.0 and +3.2 — above the non-rail sample, but not by much.
 The 'before 6' and '21-24' rail cells are 8 and 3 trips.
 
-![Rail vs other across every slice](figures/05-rail-vs-other-slices.png)
+![Rail vs other across every slice](../figures/05-rail-vs-other-slices.png)
 
 ### The gap is about the trip, not the vehicle
 
@@ -249,7 +249,7 @@ This is also why averaging eight departures mattered: on a single draw the
 non-rail median difference was 1.00 minute with a standard deviation of 8.46,
 against 1.86 and 4.21 after averaging.
 
-![Departure-time noise](figures/03-departure-time-noise.png)
+![Departure-time noise](../figures/03-departure-time-noise.png)
 
 ## Caveats
 
@@ -282,8 +282,8 @@ projected onto 2025 networks.
 | `data/transit_simple_estimates.csv` | 1,536 bus trips with both scenarios |
 | `data/transit_regional_rail_estimates.csv` | 501 rail trips with both scenarios |
 | `data/transit_traveltime_sampled_*.csv` | all eight draws per trip |
-| `tables/rail-vs-other.md` | Tables A–K above, regenerated from the CSVs |
-| `figures/` | the charts above |
+| `../tables/rail-vs-other.md` | Tables A–K above, regenerated from the CSVs |
+| `../figures/` | the charts above |
 
 Scripts: `01-pre-process.R` builds the trip table, `02-extract-regional-rail.R` pulls the
 rail sample, `03-merge-gtfs.R` joins bus and rail feeds, `04-estimate-traveltime.R` does

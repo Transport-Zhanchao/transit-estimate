@@ -4,7 +4,7 @@ setwd(here::here())
 # Builds the two deliverables in report/:
 #
 #   report/trip-level-results.csv   one row per routed trip, both scenarios
-#   report/capacity-*.md            the scheduled-service tables quoted in the report
+#   report/report.md                the report, filled in from report/report-template.md
 #
 # Trips that could not be routed under a scenario carry NA in that scenario's
 # columns; they are kept in the file rather than dropped, so the csv is the whole
@@ -279,8 +279,8 @@ se <- function(r) sprintf("%s vs %s, %+.0f%%",
 # Read and write the template as raw bytes: Rscript may not be in a UTF-8
 # locale, and readLines/writeLines would turn the report's non-ASCII characters
 # (delta, em dash, en dash) into literal <U+....> escapes.
-rep <- rawToChar(readBin("report-template.md", "raw",
-                         file.info("report-template.md")$size))
+rep <- rawToChar(readBin("report/report-template.md", "raw",
+                         file.info("report/report-template.md")$size))
 Encoding(rep) <- "UTF-8"
 subs <- list(
   BUS_MODE = bus_mode, BUS_PERIOD = bus_period, BUS_GEO = bus_geo,

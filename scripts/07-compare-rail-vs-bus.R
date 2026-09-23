@@ -6,7 +6,8 @@ setwd(here::here())
 # Input : data/transit_simple_estimates.csv          (bus / subway / trolley)
 #         data/transit_regional_rail_estimates.csv   (Regional Rail)
 #         data/transit_weekday_timed.csv             (for MODE and county)
-# Output: tables/rail-vs-other-*.md   (markdown, pasted into report.md)
+# Output: tables/rail-vs-other.md     (markdown, pasted into report/report-draft.md)
+#         figures/05-rail-vs-other-slices.png
 #
 # Every table is the same quantity - delta = cut minus restore, on the eight-draw
 # means - sliced a different way, with the two samples next to each other so the
