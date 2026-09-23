@@ -1,15 +1,18 @@
+# Paths are relative to the project root (where transit-estimate.Rproj lives).
+setwd(here::here())
+
 # Estimate a door-to-door transit travel time for every surveyed trip by
 # routing it through the SEPTA GTFS feed, departing at the trip's own
 # reported departure time.
 #
-# Input : data/transit_simple.csv   (one row per trip, from pre-process.R)
+# Input : data/transit_simple.csv   (one row per trip, from 01-pre-process.R)
 #         data/gtfs/<scenario>.zip  ("cut" = CLIFF service cuts, "restore" =
 #                                    the regular feed)
 # Output: data/transit_traveltime_<scenario>.csv
 #
 # Pick the scenario with the TT_SCENARIO environment variable:
-#   TT_SCENARIO=cut     Rscript estimate-traveltime.R
-#   TT_SCENARIO=restore Rscript estimate-traveltime.R
+#   TT_SCENARIO=cut     Rscript scripts/04-estimate-traveltime.R
+#   TT_SCENARIO=restore Rscript scripts/04-estimate-traveltime.R
 # Both must run on the same service date to be comparable (TT_DATE).
 #
 # Routing engine is gtfsrouter: a pure C++/R RAPTOR implementation, no Java and
@@ -37,7 +40,7 @@ stopifnot(SCENARIO %in% c("cut", "restore"))
 SERVICE_DATE <- as.integer(Sys.getenv("TT_DATE", "20251015"))
 
 # TT_FEED picks a feed variant: "" is City Transit only, "merged" adds Regional
-# Rail (built by merge-gtfs.R). TT_TRIPS points at a different trip table, and
+# Rail (built by 03-merge-gtfs.R). TT_TRIPS points at a different trip table, and
 # TT_TAG names the outputs so runs on different trip sets don't overwrite each other.
 FEED_VARIANT <- Sys.getenv("TT_FEED", "")
 TRIPS_CSV    <- Sys.getenv("TT_TRIPS", "data/transit_simple.csv")

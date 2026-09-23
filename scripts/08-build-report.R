@@ -1,3 +1,6 @@
+# Paths are relative to the project root (where transit-estimate.Rproj lives).
+setwd(here::here())
+
 # Builds the two deliverables in report/:
 #
 #   report/trip-level-results.csv   one row per routed trip, both scenarios

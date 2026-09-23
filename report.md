@@ -36,7 +36,7 @@ code 19, "change type of transportation." Of those, 442 route under both scenari
 Everything below is the same quantity — **delta = cut minus restore**, on the
 eight-draw means, one value per trip — sliced different ways, with Regional Rail
 and the non-rail sample side by side in every table. Positive means slower under
-the cuts. `compare-rail-vs-bus.R` regenerates all eleven tables into
+the cuts. `07-compare-rail-vs-bus.R` regenerates all eleven tables into
 `tables/rail-vs-other.md`; they are reproduced here with the reading.
 
 ### Rail loses roughly twice what everything else loses
@@ -285,8 +285,8 @@ projected onto 2025 networks.
 | `tables/rail-vs-other.md` | Tables A–K above, regenerated from the CSVs |
 | `figures/` | the charts above |
 
-Scripts: `pre-process.R` builds the trip table, `extract-regional-rail.R` pulls the
-rail sample, `merge-gtfs.R` joins bus and rail feeds, `estimate-traveltime.R` does
-the routing, `join-results.R` assembles the output tables, `make-figures.R` draws
-figures 01–04, and `compare-rail-vs-bus.R` builds the rail-vs-other tables and
+Scripts: `01-pre-process.R` builds the trip table, `02-extract-regional-rail.R` pulls the
+rail sample, `03-merge-gtfs.R` joins bus and rail feeds, `04-estimate-traveltime.R` does
+the routing, `05-join-results.R` assembles the output tables, `06-make-figures.R` draws
+figures 01–04, and `07-compare-rail-vs-bus.R` builds the rail-vs-other tables and
 figure 05.

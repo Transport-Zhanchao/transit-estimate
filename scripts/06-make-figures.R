@@ -1,3 +1,6 @@
+# Paths are relative to the project root (where transit-estimate.Rproj lives).
+setwd(here::here())
+
 # Histograms for the cut vs restore comparison.
 # Output: figures/*.png
 

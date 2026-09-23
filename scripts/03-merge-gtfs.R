@@ -1,3 +1,6 @@
+# Paths are relative to the project root (where transit-estimate.Rproj lives).
+setwd(here::here())
+
 # Merge each City Transit feed with its Regional Rail feed into one feed, so a
 # trip can walk from a bus to a train station and ride both.
 #

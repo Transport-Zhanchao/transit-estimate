@@ -1,3 +1,6 @@
+# Paths are relative to the project root (where transit-estimate.Rproj lives).
+setwd(here::here())
+
 # Add the two scenario travel times to the slim trip table.
 #
 # Input : data/transit_simple.csv              (one row per trip)
@@ -43,7 +46,7 @@ cat("8-draw mean, both      :",
     sum(!is.na(out$tt_cut_mean_min) & !is.na(out$tt_restore_mean_min)), "\n")
 
 # ---- Regional Rail trips ------------------------------------------------------
-# Same columns, for the trips pulled out by extract-regional-rail.R and routed on
+# Same columns, for the trips pulled out by 02-extract-regional-rail.R and routed on
 # the merged bus + rail feeds (2025-11-05, 8-draw means).
 rail_cut <- "data/transit_traveltime_sampled_rail_cut.csv"
 rail_res <- "data/transit_traveltime_sampled_rail_restore.csv"

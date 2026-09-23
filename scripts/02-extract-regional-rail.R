@@ -1,3 +1,6 @@
+# Paths are relative to the project root (where transit-estimate.Rproj lives).
+setwd(here::here())
+
 # Pull out the trips that involve Regional Rail and write them to their own file.
 #
 # "Involves Regional Rail" covers two kinds of record:
@@ -9,8 +12,8 @@
 # journeys are rebuilt by chaining consecutive trips of a person across that code.
 #
 # Everything else (departure-time filter, weekday, non-holiday, TAZ centroids,
-# peak flag) matches pre-process.R, so the output can be fed straight into
-# estimate-traveltime.R by pointing TRIPS_CSV at it.
+# peak flag) matches 01-pre-process.R, so the output can be fed straight into
+# 04-estimate-traveltime.R by pointing TRIPS_CSV at it.
 #
 # Output: data/transit_regional_rail.csv
 
@@ -32,7 +35,7 @@ raw <- raw %>%
 
 rail_journeys <- raw %>% filter(MODE == 22) %>% pull(journey_id) %>% unique()
 
-# ---- same filters as pre-process.R, but keeping Regional Rail ---------------
+# ---- same filters as 01-pre-process.R, but keeping Regional Rail ---------------
 hh <- read.csv("data/1_household_public.csv", encoding = "latin1") %>%
   select(HH_ID, TRAV_DOW, TRAV_DATE, HOLIDAY, HOL_TYPE)
 
@@ -70,7 +73,7 @@ trips <- trips %>%
             by = "D_TAZ") %>%
   filter(!is.na(depart_lon), !is.na(dest_lon))
 
-# ---- peak flag, same windows as pre-process.R -------------------------------
+# ---- peak flag, same windows as 01-pre-process.R -------------------------------
 AM_PEAK <- c(6 * 60, 9 * 60 + 30)
 PM_PEAK <- c(16 * 60, 19 * 60)
 trips <- trips %>%
