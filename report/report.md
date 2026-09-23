@@ -3,9 +3,7 @@
 Prepared from DVRPC household-survey trips routed through
 SEPTA's service-cut and restored GTFS feeds.
 
-Companion file: **`trip-level-results.csv`** — one row per surveyed trip, both
-scenarios, NA where a trip could not be routed. Everything in this report is an
-aggregate of that file.
+Companion file: **`trip-level-results.csv`**
 
 
 ## 1. Methodology
@@ -14,10 +12,10 @@ aggregate of that file.
 
 Trips come from the DVRPC Household Travel Survey (2012–13) trip file. The
 starting filter is: origin and destination both in Pennsylvania, aggregate mode
-transit (`MODE_AGG` = 5), a parseable clock time in `DEPART`, a weekday travel
-date, and no major or minor holiday. Origins and destinations are Traffic
-Analysis Zone centroids from DVRPC's TAZ layer, computed in EPSG:26918 and
-returned as lon/lat.
+transit (`MODE_AGG` = 5). We filtered the trip to weekday travel
+dates only, and excluded major or minor holidays. We further filtered trips using NJ Transit and Amtrak. 
+Origins and destinations are Traffic Analysis Zone centroids from DVRPC's TAZ layer, 
+computed in EPSG:26918 and returned as lon/lat.
 
 That produces two samples, which are kept apart because they route on different
 feeds:
@@ -29,10 +27,10 @@ feeds:
 
 Regional Rail trips are assembled by chaining consecutive survey trips across
 activity code 19, "change type of transportation," so a journey that walks to a
-bus, rides to a station and then takes a train is recognised as one rail journey.
+bus, rides to a station, and then takes a train is recognized as one rail journey.
 The 501 records are 479 train legs plus 22 bus or subway legs feeding a station.
 Those 22 feeder legs also appear in the bus sample, so they appear twice in the
-csv under different `sample` values; no aggregate in this report mixes the two.
+CSV under different `sample` values; no aggregate in this report mixes the two.
 
 The two service dates differ because the restored rail feed only begins weekday
 service on 2025-10-26. Both City Transit feeds operate identical trip counts on
@@ -42,8 +40,8 @@ the two dates, so the samples stay comparable.
 
 Each trip is routed on its own, door to door: walk to a stop, wait, ride
 (transfers included), walk from the last stop to the destination. The two
-scenarios are SEPTA's published cut and restored GTFS feeds, routed identically;
-for the rail sample the City Transit and Regional Rail feeds are merged into one
+scenarios are SEPTA's published cut and restored GTFS feeds, routed identically.
+For the rail sample, the City Transit and Regional Rail feeds are merged into one
 so a trip can transfer between a bus and a train.
 
 **Eight departures per trip.** Each trip is routed eight times, at departures
@@ -53,10 +51,8 @@ spacing is 8.5 minutes. That number is deliberate: SEPTA headways cluster on 10,
 the same point in the headway cycle and all eight would inherit the same wait.
 The 59.5-minute span avoids the same trap at the ends.
 
-This matters more than it sounds. On a single draw the bus median difference
-between scenarios is 1.00 minute with a standard deviation of 8.46; after
-averaging eight it is 1.86 with a standard deviation of 4.21. A single-departure
-design would mostly measure headway luck.
+On a single draw, the bus median difference between scenarios is 1.00 minute with a standard deviation of 8.46; 
+after averaging eight, it is 1.86 with a standard deviation of 4.21. A single-departure design would mostly measure headway luck.
 
 ### The quantity reported
 
@@ -67,8 +63,8 @@ Throughout, for each trip:
 ```
 
 Positive means **slower under the cuts**. Both terms are eight-draw means. Where
-a trip failed to route under one scenario it has no Δ and is excluded from
-aggregates, but the row is kept in the csv with NA.
+a trip failed to route under one scenario, it has no Δ and is excluded from
+aggregates, but the row is kept in the CSV with NA.
 
 Peak periods follow SEPTA's Regional Rail fare rule, applied to the trip's own
 reported departure time: AM peak 6:00–9:30, PM peak 16:00–19:00, everything else
@@ -81,7 +77,6 @@ GTFS carries no seat or consist data, so capacity in section 3.2 means
 calling at one stop), which is the trip count weighted by how many stops each run
 serves. Neither is a seat count; a shortened consist would not show up.
 
----
 
 ## 2. Purpose
 
@@ -108,7 +103,6 @@ The analysis is descriptive. It compares two operating plans as SEPTA published
 them; it does not estimate a causal effect of the cuts, and it does not model
 ridership response, crowding or mode shift.
 
----
 
 ## 3. Results
 
@@ -275,7 +269,7 @@ Collapsing to that one cell:
 | All trips | +3.73 (n=442) | +1.86 (n=1,473) |
 
 **That cell is 209 trips, 47% of the rail sample, and it carries the entire
-rail-versus-bus difference.** Remove it and the two samples are the same number.
+rail-versus-bus difference.** Remove it, and the two samples are the same number.
 Within it, 31% of rail trips lose more than 10 minutes against 6% of comparable
 non-rail trips.
 
@@ -295,7 +289,6 @@ more than whether the cuts were in effect**. The scenario effect is real but onl
 emerges in aggregate; it is not something a single rider could reliably detect on
 a given morning.
 
----
 
 ## 4. Limitations
 
@@ -309,9 +302,9 @@ ran them, not as an isolated causal effect of the cuts. The share coming out
 faster is nearly the same in both samples, so this asymmetry does not by itself
 produce the rail-versus-bus gap.
 
-**Estimates run high against the survey.** For rail legs the restored-scenario
+**Estimates run high against the survey.** For rail legs, the restored-scenario
 median is 54.7 minutes against 38 reported and 37.8 from `Model_TravTime`, about
-45% higher. The estimates are door to door and include access walking and
+45% higher. The estimates are door-to-door and include access walking and
 waiting, which the other two largely exclude, and suburban TAZ centroids sit
 farther from stations than real addresses do. Rank correlation with
 `Model_TravTime` is 0.879, so relative comparisons hold even though levels are
@@ -320,7 +313,7 @@ travel time.**
 
 **Origins and destinations are zone centroids, not addresses.** This inflates
 access walking, and it does so unevenly: suburban zones are larger, so suburban
-trips are penalised more than city trips. Since the headline result is that
+trips are penalized more than city trips. Since the headline result is that
 suburban cross-county trips lose the most, this bias runs in the same direction
 as the finding and cannot be fully separated from it.
 
@@ -342,9 +335,8 @@ non-rail cross-county peak cell is 112 trips. Percentages on these move several
 points with a handful of trips.
 
 **No behavioural response.** Riders facing a worse trip may retime, change mode or
-not travel. None of that is modelled; every trip is held fixed and re-routed.
+not travel. None of that is modeled; every trip is held fixed and re-routed.
 
----
 
 ## 5. The trip-level file
 
