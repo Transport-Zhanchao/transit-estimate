@@ -18,6 +18,7 @@ where you launch them from.
 | 06 | `06-make-figures.R` | Draws figures 01–04 | `figures/*.png` |
 | 07 | `07-compare-rail-vs-bus.R` | Rail vs other tables and figure 05 | `tables/rail-vs-other.md` |
 | 08 | `08-build-report.R` | Fills `report/report-template.md` and writes the trip-level csv | `report/report.md`, `report/trip-level-results.csv` |
+| 09 | `09-join-hhts.R` | Joins household / person / trip survey attributes onto the trip-level results | `data/trip_hhts_joined.csv` |
 
 Example:
 
