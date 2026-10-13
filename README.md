@@ -19,6 +19,9 @@ where you launch them from.
 | 07 | `07-compare-rail-vs-bus.R` | Rail vs other tables and figure 05 | `tables/rail-vs-other.md` |
 | 08 | `08-build-report.R` | Fills `report/report-template.md` and writes the trip-level csv | `report/report.md`, `report/trip-level-results.csv` |
 | 09 | `09-join-hhts.R` | Joins household / person / trip survey attributes onto the trip-level results | `data/trip_hhts_joined.csv` |
+| 10 | `10-build-panel.R` | Reshapes to a trip x scenario panel and adds distance to Center City, trip length and origin county / area | `data/trip_panel.csv` |
+| 11 | `11-model-delta.R` | Panel FE, ordered, binary and multinomial logits of the travel-time change on geography and demographics | `tables/model-delta.md` |
+| 12 | `12-check-repeat-trips.R` | Checks whether people with several trips drive the 11 results (clustered vs naive SE, person weights, one-trip-per-person draws) | `tables/repeat-trips-check.md` |
 
 Example:
 
