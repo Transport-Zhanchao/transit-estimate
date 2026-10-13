@@ -22,6 +22,7 @@ where you launch them from.
 | 10 | `10-build-panel.R` | Reshapes to a trip x scenario panel and adds distance to Center City, trip length and origin county / area | `data/trip_panel.csv` |
 | 11 | `11-model-delta.R` | Panel FE, ordered, binary and multinomial logits of the travel-time change on geography and demographics | `tables/model-delta.md` |
 | 12 | `12-check-repeat-trips.R` | Checks whether people with several trips drive the 11 results (clustered vs naive SE, person weights, one-trip-per-person draws) | `tables/repeat-trips-check.md` |
+| 13 | `13-describe-delta.R` | Group means, correlations and OLS of the travel-time change (pooled and by sample) | `tables/delta-correlates.md` |
 
 Example:
 
